@@ -18,4 +18,8 @@ public class JsonUtils {
         return gson.toJson(obj);
     }
 
+    public static void echoJson(Object obj) {
+        System.out.println(toJson(obj));
+    }
+
 }
