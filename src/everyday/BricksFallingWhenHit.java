@@ -3,11 +3,6 @@ package everyday;
 import org.junit.jupiter.api.Test;
 import utils.JsonUtils;
 
-import java.util.ArrayList;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Set;
-
 /**
  * Problem: 803 <br />
  * Link:    https://leetcode-cn.com/problems/bricks-falling-when-hit/ <br />
@@ -36,12 +31,10 @@ public class BricksFallingWhenHit {
         );
     }
 
+    final static int[][] AROUND = new int[][]{{0, -1}, {0, 1}, {-1, 0}, {1, 0}};
+
     /**
      * 打砖块
-     *
-     * <pre>
-     *     emmm 效率有点差，但是可以过
-     * </pre>
      *
      * @param grid 二元网格，其中 1 表示砖块，0 表示空白。砖块 稳定（不会掉落）的前提是：
      *             <ul>
@@ -52,85 +45,65 @@ public class BricksFallingWhenHit {
      * @return 返回一个数组 result ，其中 result[i] 表示第 i 次消除操作对应掉落的砖块数目。
      */
     public int[] hitBricks(int[][] grid, int[][] hits) {
-        final int hitFlag = 2, hitNum = hits.length;
-        final int jLimit = grid[0].length, iLimit = grid.length;
-        int[] result = new int[hitNum];
-        UnionFind unionFind = new UnionFind(jLimit * iLimit);
+        final int row = grid.length, col = grid[0].length, size = col * row;
+        int[] result = new int[hits.length];
+        // 0 作为屋顶的虚拟节点
+        UnionFind unionFind = new UnionFind(size + 1);
 
         for (int[] hit : hits) {
             if (grid[hit[0]][hit[1]] == 1) {
-                grid[hit[0]][hit[1]] = hitFlag;
+                grid[hit[0]][hit[1]] = 2;
             }
         }
-        for (int i = 0; i < iLimit; i++) {
-            for (int j = 0; j < jLimit; j++) {
-                final int type = grid[i][j];
-                if (type != 1) {
+        for (int i = 0; i < row; i++) {
+            for (int j = 0; j < col; j++) {
+                if (grid[i][j] != 1) {
                     continue;
                 }
-                int pointIndex = i * jLimit + j;
-                int[][] allAround = pointAllAround(i, j, jLimit, iLimit);
-                for (int[] point : allAround) {
-                    if (grid[point[0]][point[1]] == type) {
-                        unionFind.add(pointIndex, point[0] * jLimit + point[1]);
-                    }
+                if (i == 0) {
+                    unionFind.add(pos2Idx(i, j, col), 0);
                 }
+                connect(grid, col, row, unionFind, i, j);
             }
         }
         for (int i = hits.length - 1; i >= 0; i--) {
-            final int hitI = hits[i][0], hitJ = hits[i][1];
+            int hitI = hits[i][0], hitJ = hits[i][1];
             if (grid[hitI][hitJ] == 0) {
                 continue;
             }
             int beforeNum, afterNum;
             // 统计之前稳定的数量
-            beforeNum = cntStableNum(unionFind, grid, jLimit);
-            // 这里肯定是type为2的情况，现在还是找四周，只要不是2和0就可以连通
-            int pointIndex = hitI * jLimit + hitJ;
-            int[][] allAround = pointAllAround(hitI, hitJ, jLimit, iLimit);
-            for (int[] point : allAround) {
-                if (grid[point[0]][point[1]] == 1) {
-                    unionFind.add(pointIndex, point[0] * jLimit + point[1]);
-                }
-            }
+            beforeNum = unionFind.getConNum(0);
             grid[hitI][hitJ] = 1;
-            // 统计之后稳定的数量
-            afterNum = cntStableNum(unionFind, grid, jLimit);
-            if (beforeNum != afterNum) {
-                result[i] = afterNum - beforeNum - 1;
+            if (hitI == 0) {
+                unionFind.add(pos2Idx(0, hitJ, col), 0);
             }
+            connect(grid, col, row, unionFind, hitI, hitJ);
+            // 统计之后稳定的数量
+            afterNum = unionFind.getConNum(0);
+            result[i] = Math.max(afterNum - beforeNum - 1, 0);
         }
 
         return result;
     }
 
-    private int cntStableNum(UnionFind unionFind, int[][] grid, int maxStableIdx) {
-        int cnt = 0;
-        Set<Integer> rootSet = new HashSet<>();
-        for (int i = 0; i < maxStableIdx; i++) {
-            if (grid[0][i] != 1) {
-                continue;
-            }
-            int root = unionFind.find(i);
-            if (!rootSet.contains(root)) {
-                cnt += unionFind.getConNum(root);
-                rootSet.add(root);
-            }
-        }
-        return cnt;
+    private int pos2Idx(int i, int j, int jLimit) {
+        return i * jLimit + j + 1;
     }
 
-    private int[][] pointAllAround(int i, int j, final int jLimit, final int iLimit) {
-        final int[][] around = new int[][]{{0, -1}, {0, 1}, {-1, 0}, {1, 0}};
-        List<int[]> res = new ArrayList<>(4);
-        for (int[] inc : around) {
-            int newX = i + inc[0];
-            int newY = j + inc[1];
-            if (newX >= 0 && newX < iLimit && newY >= 0 && newY < jLimit) {
-                res.add(new int[]{newX, newY});
+    private void connect(int[][] grid, int jLimit, int iLimit, UnionFind unionFind, int i, int j) {
+        int pointIndex = pos2Idx(i, j, jLimit);
+        for (int[] inc : AROUND) {
+            int newI = i + inc[0], newJ = j + inc[1];
+            if (newI >= 0 && newI < iLimit && newJ >= 0 && newJ < jLimit) {
+                if (grid[newI][newJ] == 1) {
+                    if (newI == 0) {
+                        unionFind.add(pos2Idx(newI, newJ, jLimit), 0);
+                    }
+                    unionFind.add(pos2Idx(newI, newJ, jLimit), pointIndex);
+                }
             }
         }
-        return res.toArray(new int[0][]);
     }
 
     private static class UnionFind {
@@ -147,14 +120,14 @@ public class BricksFallingWhenHit {
         }
 
         public boolean add(int q, int p) {
-            int qRoot = find(q);
-            int pRoot = find(p);
+            int qRoot = find(q), pRoot = find(p);
             if (qRoot == pRoot) {
                 return false;
             }
-            parent[qRoot] = pRoot;
-            nodeNum[pRoot] += nodeNum[qRoot];
-            nodeNum[qRoot] = 1;
+            int subSet = Math.max(qRoot, pRoot), mainSet = Math.min(qRoot, pRoot);
+            parent[subSet] = mainSet;
+            nodeNum[mainSet] += nodeNum[subSet];
+            nodeNum[subSet] = 1;
             return true;
         }
 
@@ -167,7 +140,7 @@ public class BricksFallingWhenHit {
         }
 
         public int getConNum(int node) {
-            return nodeNum[node];
+            return nodeNum[find(node)];
         }
     }
 
